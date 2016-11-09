@@ -125,13 +125,13 @@ begin
 			for j in 0 to 3 loop
 				-- Get 4 bits of data from SBox using 4bits sequentially from X as an SBox selector and append up to 32 bits
 				X(j) := (to_unsigned(SBox(i, to_integer(X(j)(31 downto 28))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(27 downto 24))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(23 downto 20))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(19 downto 16))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(15 downto 12))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(11 downto 8 ))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(7  downto 4 ))), 4) and X"F") &
-						(to_unsigned(SBox(i, to_integer(X(j)(3  downto 0 ))), 4) and X"F");
+					(to_unsigned(SBox(i, to_integer(X(j)(27 downto 24))), 4) and X"F") &
+					(to_unsigned(SBox(i, to_integer(X(j)(23 downto 20))), 4) and X"F") &
+					(to_unsigned(SBox(i, to_integer(X(j)(19 downto 16))), 4) and X"F") &
+					(to_unsigned(SBox(i, to_integer(X(j)(15 downto 12))), 4) and X"F") &
+					(to_unsigned(SBox(i, to_integer(X(j)(11 downto 8 ))), 4) and X"F") &
+					(to_unsigned(SBox(i, to_integer(X(j)(7  downto 4 ))), 4) and X"F") &
+					(to_unsigned(SBox(i, to_integer(X(j)(3  downto 0 ))), 4) and X"F");
 			end loop;
 			if i < 31 then
 				-- first 31 routines
