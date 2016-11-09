@@ -139,9 +139,9 @@ begin
 					eax := X"00000000";	
 					ebx := X"00000000";
 					ecx := X"00000000";
-					while (LTTableInverse(a, to_integer(eax)) /= MARKER) loop
+					while (LTTable(a, to_integer(eax)) /= MARKER) loop
 						-- xor the register bit with final result with LTTable as the bit selector
-						ecx := to_unsigned(LTTableInverse(a, to_integer(eax)), ecx'length);
+						ecx := to_unsigned(LTTable(a, to_integer(eax)), ecx'length);
 						ebx(0) := ebx(0) xor (finalResult(to_integer(ecx/32))(to_integer(ecx mod 32)));
 						eax := eax+1; 
 					end loop;
