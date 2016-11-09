@@ -145,14 +145,14 @@ begin
 						ebx(0) := ebx(0) xor (finalResult(to_integer(ecx/32))(to_integer(ecx mod 32)));
 						eax := eax+1; 
 					end loop;
-					X(a/32)(a mod 32) := ebx(0);
+					finalResult(a/32)(a mod 32) := ebx(0);
 				end loop; 
 			else
 				-- last iteration routine
-				X(0) := finalResult(0) xor subkeysHat(32, 0);
-				X(1) := finalResult(1) xor subkeysHat(32, 1);
-				X(2) := finalResult(2) xor subkeysHat(32, 2);
-				X(3) := finalResult(3) xor subkeysHat(32, 3);
+				finalResult(0) := X(0) xor subkeysHat(32, 0);
+				finalResult(1) := X(1) xor subkeysHat(32, 1);
+				finalResult(2) := X(2) xor subkeysHat(32, 2);
+				finalResult(3) := X(3) xor subkeysHat(32, 3);
 			end if;
 		end loop;
 		
