@@ -5,14 +5,17 @@ use IEEE.numeric_std.all;
 use work.tables.all;
 
 entity serpent_decryption is
-	port(plaintext, key: in std_logic_vector(127 downto 0); data_ready: buffer std_logic; CLK: in std_logic; decrypted: out std_logic_vector(127 downto 0));
+	port(ciphertext, key: in std_logic_vector(127 downto 0) := (others=>'0'); 
+	data_ready: buffer std_logic := '0'; 
+	CLK: in std_logic := '0'; 
+	decrypted: out std_logic_vector(127 downto 0) := (others=>'0'));
 end entity;
 
 architecture decrypt of serpent_decryption is
 
 function InverseFinalPermutation(input: uintArray(0 to 3)) return uintArray is
-variable output: uintArray(0 to 3);
-variable replacer: integer;
+variable output: uintArray(0 to 3) := (others => X"00000000");
+variable replacer: integer := 0;
 begin
 	-- save end bits
 	output(0)(0) := input(0)(0);
@@ -25,8 +28,8 @@ begin
 end InverseFinalPermutation;
 
 function InverseInitialPermutation(input: uintArray(0 to 3)) return uintArray is
-variable output: uintArray(0 to 3);
-variable replacer: integer;
+variable output: uintArray(0 to 3) := (others => X"00000000");
+variable replacer: integer := 0;
 begin
 	-- save end bits
 	output(0)(0) := input(0)(0);
@@ -42,21 +45,21 @@ begin
 	process	
 	
 	-- registers
-	variable eax, ebx, ecx: unsigned(31 downto 0);
+	variable eax, ebx, ecx: unsigned(31 downto 0) := (X"00000000");
 	
-	variable extended_key: uintArray(0 to 7);
-	variable prekeys: uintArray(0 to 139);
-	variable subkeys: uintArray2d(0 to 32, 0 to 3);
-	variable subkeysHat: uintArray2d(0 to 32, 0 to 3);
-	variable X: uintArray(0 to 3);
-	variable plaintextWordSplit: uintArray(0 to 3);
-	variable finalResult: uintArray(0 to 3); 
-	variable finalResultFP: uintArray(0 to 3);
+	variable extended_key: uintArray(0 to 7) := (others => X"00000000");
+	variable prekeys: uintArray(0 to 139) := (others => X"00000000");
+	variable subkeys: uintArray2d(0 to 32, 0 to 3) := (others => (others => X"00000000"));
+	variable subkeysHat: uintArray2d(0 to 32, 0 to 3) := (others => (others => X"00000000"));
+	variable X: uintArray(0 to 3) := (others => X"00000000");
+	variable ciphertextWordSplit: uintArray(0 to 3) := (others => X"00000000");
+	variable finalResult: uintArray(0 to 3) := (others => X"00000000"); 
+	variable finalResultFP: uintArray(0 to 3) := (others => X"00000000");
 	begin
 		-- execution on rising edge and data_ready
 		wait until (CLK'event and CLK='1') and data_ready='1'; 
 		-- disallow more data to cross over
-		data_ready <= '0';
+		--data_ready <= '0';
 		
 		-- bit extend 128bit key into 256bits
 		extended_key(4)(0) := '1';
@@ -79,9 +82,9 @@ begin
 		ebx := X"00000000";
 		for i in 0 to 32 loop
 			-- SBox selector
-			eax := to_unsigned(32+3-i, eax'length);
+			eax := to_unsigned((32+3-i) mod 32, eax'length);
 			for j in 0 to 31 loop
-				ebx := resize(prekeys(8+3+(4*i))(j)&prekeys(8+2+(4*i))(j)&prekeys(8+1+(4*i))(j)&prekeys(8+0+(4*i))(j), ebx'length);
+				ebx(3 downto 0) := prekeys(8+3+(4*i))(j)&prekeys(8+2+(4*i))(j)&prekeys(8+1+(4*i))(j)&prekeys(8+0+(4*i))(j);
 				ebx := to_unsigned(Sbox(to_integer(eax), to_integer(ebx)), ebx'length);
 				for l in 0 to 3 loop
 					subkeys(i, l)(j) := ebx(l);
@@ -95,19 +98,19 @@ begin
 			subkeysHat(i,0)(0) := subkeys(i,0)(0); 
 			subkeysHat(i,3)(31) := subkeys(i,3)(31);
 			for j in 1 to 126 loop
-				subkeysHat(i, ((j*32)mod 127)/32)(j mod 32) := subkeys(i, ((j*32)mod 127)/32)(((j*32)mod 127) mod 32);
+				subkeysHat(i, j/32)(j mod 32) := subkeys(i, ((j*32)mod 127)/32)(((j*32)mod 127) mod 32);
 			end loop;
 		end loop;
 		-- end key processing
 		
-		-- reverse plaintext processing
+		-- reverse ciphertext processing
 		-- reverse final permutation
 		
-		-- split plaintext into 4 words
+		-- split ciphertext into 4 words
 		for i in 0 to 127 loop
-			plaintextWordSplit(i/32)(i mod 32) := plaintext(i);
+			ciphertextWordSplit(i/32)(i mod 32) := ciphertext(i);
 		end loop;
-		finalResult := InverseFinalPermutation(plaintextWordSplit);
+		finalResult := InverseFinalPermutation(ciphertextWordSplit);
 		
 		-- Inverse Linear Transformation - 32 rounds
 		
