@@ -2,6 +2,15 @@
 //  main.c
 //  Serpent
 //
+//  This implementation shows two different methods of serpent
+//      1. Regular mode  -- shown with the decryption module
+//      2. Bitslice mode -- shown with the encryption module
+//  Both models have the same key generation method, except
+//      - Regular mode includes an initial and final permutation for plaintext
+//      - Regular mode has a key permutation step
+//      - Regular mode uses the SBox slightly different in the linear transformation
+//      - Bitslice mode for LT uses an equation, regular mode uses the linear transformation tables
+//  Feeding the output of the Bitslice encryption into the regular mode decryption proves it's equality in correctness
 
 #include <stdio.h>
 #include <string.h>
@@ -46,10 +55,10 @@ int main(int argc, const char * argv[]) {
     unsigned char * key_string_hex  = malloc(16);
     hexConvert(key_string, key_string_hex);
     
-    serpent_encrypt(test_string_hex, key_string_hex, encrypted_string, 16);
+    serpent_encrypt_bitslice(test_string_hex, key_string_hex, encrypted_string, 16);
     printHex(encrypted_string, 16, "Encrypted Cipher:");
     printf("\n");
-    serpent_decrypt(encrypted_string, key_string_hex, decrypted_string, 16);
+    serpent_decrypt_bitslice(encrypted_string, key_string_hex, decrypted_string, 16);
     printHex(decrypted_string, 16, "Decrypted Cipher:");
     
     free(encrypted_string);

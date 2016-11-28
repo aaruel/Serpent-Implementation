@@ -122,7 +122,7 @@ BIT getBit(WORD x[], int p) {
                    & ((WORD) 0x1 << p%BITS_PER_WORD)) >> p%BITS_PER_WORD);
 }
 
-void serpent_encrypt(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+void key_generation_standard(uint subkeysHat[33][4], const uchar *key, uchar *output, uint kBytes) {
     // 33 subkeys * 32bits * 4 blocks
     uint subkeys[33][4]= {0};
     uint keysplit[8]   = {0};
@@ -133,8 +133,6 @@ void serpent_encrypt(const unsigned char* plaintext, const unsigned char* key, u
         fprintf(stderr, "Given output char pointer not initialized/allocated.\n");
         exit(EXIT_FAILURE);
     }
-
-    printHex(plaintext, 16, "Plaintext:");
     
     /* BIT EXTEND KEY */
     
@@ -184,18 +182,100 @@ void serpent_encrypt(const unsigned char* plaintext, const unsigned char* key, u
         int currentBox = (32 + 3 - i) % 32;
         char sboxOut= 0;
         for(int j = 0; j < 32; ++j) {
-            sboxOut = SBox[currentBox][((interkey[8+0+(4*i)]>>j)&1) <<0 |
-                                       ((interkey[8+1+(4*i)]>>j)&1) <<1 |
-                                       ((interkey[8+2+(4*i)]>>j)&1) <<2 |
-                                       ((interkey[8+3+(4*i)]>>j)&1) <<3 ];
+            sboxOut = SBox[currentBox%8][((interkey[8+0+(4*i)]>>j)&1) <<0 |
+                                         ((interkey[8+1+(4*i)]>>j)&1) <<1 |
+                                         ((interkey[8+2+(4*i)]>>j)&1) <<2 |
+                                         ((interkey[8+3+(4*i)]>>j)&1) <<3 ];
             for(int l = 0; l < 4; ++l) {
                 subkeys[i][l] |= ((sboxOut >> l)&1)<<j;
             }
         }
     }
     
-    /*  Start plaintext processing  */
+    // PERMUTATE THE KEYS
+    for(int i = 0; i < 33; ++i) {
+        InitialPermutation(subkeys[i], subkeysHat[i]);
+    }
+}
+
+void key_generation_bitslice(uint subkeys[33][4], const uchar *key, uchar *output, uint kBytes) {
+    // 33 subkeys * 32bits * 4 blocks
+    uint keysplit[8]   = {0};
+    uint interkey[140] = {0};
     
+    // memory precheck
+    if(output == NULL) {
+        fprintf(stderr, "Given output char pointer not initialized/allocated.\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    /* BIT EXTEND KEY */
+    
+    // check if key needs to be padded then
+    // split original key into 8 32bit prekeys
+    if(kBytes < 32){
+        unsigned char tempkey[32] = {0};
+        // if shorter than 32 bytes, pad key with 0b1
+        ulong kl = kBytes;
+        for(int i = 0; i < kl; ++i) {
+            tempkey[i] = key[i];
+        }
+        tempkey[kl] = 0b00000001;
+        for(int i = 0; i < 8; ++i) {
+            keysplit[i] = *(((uint*)tempkey)+i);
+        }
+        printHex(tempkey, 32, "Key:");
+    }
+    else if(kBytes == 32) {
+        for(int i = 0; i < 8; ++i) {
+            keysplit[i] = *(((uint*)key)+i);
+        }
+        printHex(key, 32, "Key:");
+    }
+    else {
+        printf("Key Length Error\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    // load keysplit into interkey
+    for(int i = 0; i < 8; ++i){
+        interkey[i] = keysplit[i];
+    }
+    
+    /* GENERATE PREKEYS */
+    
+    for(int i = 8; i < 140; ++i) {
+        interkey[i] = rotl((interkey[i-8] ^ interkey[i-5] ^ interkey[i-3] ^ interkey[i-1] ^ phi ^ (i-8)), 11);
+    }
+    
+    /* GENERATE SUBKEYS */
+    
+    // generate keys from s-boxes
+    // holds keys
+    for(int i = 0; i < 33; ++i) {
+        // descending selector starting at 3
+        int currentBox = (32 + 3 - i) % 32;
+        char sboxOut= 0;
+        for(int j = 0; j < 32; ++j) {
+            sboxOut = SBox[currentBox%8][((interkey[8+0+(4*i)]>>j)&1) <<0 |
+                                         ((interkey[8+1+(4*i)]>>j)&1) <<1 |
+                                         ((interkey[8+2+(4*i)]>>j)&1) <<2 |
+                                         ((interkey[8+3+(4*i)]>>j)&1) <<3 ];
+            for(int l = 0; l < 4; ++l) {
+                subkeys[i][l] |= ((sboxOut >> l)&1)<<j;
+            }
+        }
+    }
+}
+
+void serpent_encrypt_standard(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+    // 33 subkeys * 32bits * 4 blocks
+    uint subkeysHat[33][4]= {0};
+    
+    printHex(plaintext, 16, "Plaintext:");
+    key_generation_standard(subkeysHat, key, output, kBytes);
+    
+    /*  Start plaintext processing  */
     
     /* INITIAL PERMUTATION */
     
@@ -209,13 +289,6 @@ void serpent_encrypt(const unsigned char* plaintext, const unsigned char* key, u
     
     /* LINEAR TRANSFORMATION */
     
-    
-    // PERMUTATE THE KEYS
-    uint subkeysHat[33][4]= {0};
-    for(int i = 0; i < 33; ++i) {
-        InitialPermutation(subkeys[i], subkeysHat[i]);
-    }
-    
     // 32 rounds
     uint X[4] = {0};
     for(int i = 0; i < 32; ++i) {
@@ -223,29 +296,16 @@ void serpent_encrypt(const unsigned char* plaintext, const unsigned char* key, u
             X[j] = result[j] ^ subkeysHat[i][j];
         }
         for(int j = 0; j < 4; ++j) {
-            X[j] =  (SBox[i][(X[j] >> 0 ) & 0xF]) << 0 |
-            (SBox[i][(X[j] >> 4 ) & 0xF]) << 4 |
-            (SBox[i][(X[j] >> 8 ) & 0xF]) << 8 |
-            (SBox[i][(X[j] >> 12) & 0xF]) << 12|
-            (SBox[i][(X[j] >> 16) & 0xF]) << 16|
-            (SBox[i][(X[j] >> 20) & 0xF]) << 20|
-            (SBox[i][(X[j] >> 24) & 0xF]) << 24|
-            (SBox[i][(X[j] >> 28) & 0xF]) << 28;
+            X[j] =  (SBox[i%8][(X[j] >> 0 ) & 0xF]) << 0 |
+                    (SBox[i%8][(X[j] >> 4 ) & 0xF]) << 4 |
+                    (SBox[i%8][(X[j] >> 8 ) & 0xF]) << 8 |
+                    (SBox[i%8][(X[j] >> 12) & 0xF]) << 12|
+                    (SBox[i%8][(X[j] >> 16) & 0xF]) << 16|
+                    (SBox[i%8][(X[j] >> 20) & 0xF]) << 20|
+                    (SBox[i%8][(X[j] >> 24) & 0xF]) << 24|
+                    (SBox[i%8][(X[j] >> 28) & 0xF]) << 28;
         }
-        if(i < 31){
-            
-            // fails no matter what - replaced by LTtable
-            //            X[0] = rotl(X[0], 13);
-            //            X[2] = rotl(X[2], 3 );
-            //            X[1] = X[1] ^ X[0] ^ X[2];
-            //            X[3] = X[3] ^ X[2] ^ (X[0] << 3);
-            //            X[1] = rotl(X[1], 1);
-            //            X[3] = rotl(X[3], 7);
-            //            X[0] = X[0] ^ X[1] ^ X[3];
-            //            X[2] = X[2] ^ X[3] ^ (X[1] << 7);
-            //            X[0] = rotl(X[0], 5 );
-            //            X[2] = rotl(X[2], 22);
-            
+        if(i < 31){            
             for(int a = 0; a < 128; ++a) {
                 char b = 0;
                 int  j = 0;
@@ -272,81 +332,65 @@ void serpent_encrypt(const unsigned char* plaintext, const unsigned char* key, u
     // copy 128 bits to output string
     memcpy(output, finalResult, 16);
 }
-
-void serpent_decrypt(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
-    // 33 subkeys * 32bits * 4 blocks
-    uint subkeys[33][4]= {0};
-    uint keysplit[8]   = {0};
-    uint interkey[140] = {0};
+void serpent_encrypt_bitslice(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+    uint subkeys[33][4] = {0};
     
-    // memory precheck
-    if(output == NULL) {
-        fprintf(stderr, "Given output char pointer not initialized/allocated.\n");
-        exit(EXIT_FAILURE);
-    }
+    printHex(plaintext, 16, "Plaintext:");
     
-    printHex(plaintext, 16, "Ciphertext:");
-    
-    /* BIT EXTEND KEY */
-    
-    // check if key needs to be padded then
-    // split original key into 8 32bit prekeys
-    if(kBytes < 32){
-        unsigned char tempkey[32] = {0};
-        // if shorter than 32 bytes, pad key with 0b1
-        ulong kl = kBytes;
-        for(int i = 0; i < kl; ++i) {
-            tempkey[i] = key[i];
-        }
-        tempkey[kl] = 0b00000001;
-        for(int i = 0; i < 8; ++i) {
-            keysplit[i] = *(((uint*)tempkey)+i);
-        }
-        printHex(tempkey, 32, "Key:");
-    }
-    else if(kBytes == 32) {
-        for(int i = 0; i < 8; ++i) {
-            keysplit[i] = *(((uint*)key)+i);
-        }
-        printHex(key, 32, "Key:");
-    }
-    else {
-        printf("Key Length Error\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    // load keysplit into interkey
-    for(int i = 0; i < 8; ++i){
-        interkey[i] = keysplit[i];
-    }
-    
-    /* GENERATE PREKEYS */
-    
-    for(int i = 8; i < 140; ++i) {
-        interkey[i] = rotl((interkey[i-8] ^ interkey[i-5] ^ interkey[i-3] ^ interkey[i-1] ^ phi ^ (i-8)), 11);
-    }
-    
-    /* GENERATE SUBKEYS */
-    
-    // generate keys from s-boxes
-    // holds keys
-    for(int i = 0; i < 33; ++i) {
-        // descending selector starting at 3
-        int currentBox = (32 + 3 - i) % 32;
-        char sboxOut= 0;
-        for(int j = 0; j < 32; ++j) {
-            sboxOut = SBox[currentBox][((interkey[8+0+(4*i)]>>j)&1) <<0 |
-                                       ((interkey[8+1+(4*i)]>>j)&1) <<1 |
-                                       ((interkey[8+2+(4*i)]>>j)&1) <<2 |
-                                       ((interkey[8+3+(4*i)]>>j)&1) <<3 ];
-            for(int l = 0; l < 4; ++l) {
-                subkeys[i][l] |= ((sboxOut >> l)&1)<<j;
-            }
-        }
-    }
+    key_generation_bitslice(subkeys, key, output, kBytes);
     
     /*  Start plaintext processing  */
     
+    // ignore bit[0] and bit[127]
+    // replace bit[1..126] with bit[(i*32)%127]
+    uint *X = (uint*)plaintext;
+    
+    /* LINEAR TRANSFORMATION */
+    // 32 rounds
+    uint uX[4] = {0};
+    for(int i = 0; i < 32; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            uX[j] = X[j] ^ subkeys[i][j];
+            X[j] =  0;
+        }
+        for(int j = 0; j < 32; ++j) {
+            uint v = (SBox[i%8][((uX[0] >> (j)) & 1) << 0 |
+                                ((uX[1] >> (j)) & 1) << 1 |
+                                ((uX[2] >> (j)) & 1) << 2 |
+                                ((uX[3] >> (j)) & 1) << 3 ]);
+            
+            X[0] |= ((v >> 0)&1) << j;
+            X[1] |= ((v >> 1)&1) << j;
+            X[2] |= ((v >> 2)&1) << j;
+            X[3] |= ((v >> 3)&1) << j;
+        }
+        if(i < 31){
+            // reduced assignment linear mixing (minimized from step equation in documentation)
+            X[1] = rotl(X[1] ^ rotl(X[0], 13) ^ rotl(X[2], 3 ), 1);
+            X[3] = rotl(X[3] ^ rotl(X[2], 3 ) ^ (rotl(X[0], 13) << 3), 7);
+            X[0] = rotl(rotl(X[0], 13) ^ X[1] ^ X[3], 5 );
+            X[2] = rotl(rotl(X[2], 3 ) ^ X[3] ^ (X[1] << 7), 22);
+        }
+        else{
+            // In the last round, the transformation is replaced by an additional key mixing
+            X[0] = X[0] ^ subkeys[32][0];
+            X[1] = X[1] ^ subkeys[32][1];
+            X[2] = X[2] ^ subkeys[32][2];
+            X[3] = X[3] ^ subkeys[32][3];
+        }
+    }
+    
+    // copy 128 bits to output string
+    memcpy(output, X, 16);
+}
+
+void serpent_decrypt_standard(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+    
+    uint subkeysHat[33][4] = {0};
+    
+    key_generation_standard(subkeysHat, key, output, kBytes);
+    
+    /*  Start plaintext processing  */
     
     /* REVERSE FINAL PERMUTATION */
     
@@ -359,13 +403,6 @@ void serpent_decrypt(const unsigned char* plaintext, const unsigned char* key, u
     // result == Bi
     
     /* REVERSE LINEAR TRANSFORMATION */
-    
-    
-    // PERMUTATE THE KEYS
-    uint subkeysHat[33][4]= {0};
-    for(int i = 0; i < 33; ++i) {
-        InitialPermutation(subkeys[i], subkeysHat[i]);
-    }
     
     // 32 rounds
     uint X[4] = {0};
@@ -389,14 +426,14 @@ void serpent_decrypt(const unsigned char* plaintext, const unsigned char* key, u
             X[3] = result[3] ^ subkeysHat[32][3];
         }
         for(int j = 0; j < 4; ++j) {
-            X[j] =  (SBoxInverse[i][(X[j] >> 0 ) & 0xF]) << 0 |
-                    (SBoxInverse[i][(X[j] >> 4 ) & 0xF]) << 4 |
-                    (SBoxInverse[i][(X[j] >> 8 ) & 0xF]) << 8 |
-                    (SBoxInverse[i][(X[j] >> 12) & 0xF]) << 12|
-                    (SBoxInverse[i][(X[j] >> 16) & 0xF]) << 16|
-                    (SBoxInverse[i][(X[j] >> 20) & 0xF]) << 20|
-                    (SBoxInverse[i][(X[j] >> 24) & 0xF]) << 24|
-                    (SBoxInverse[i][(X[j] >> 28) & 0xF]) << 28;
+            X[j] =  (SBoxInverse[i%8][(X[j] >> 0 ) & 0xF]) << 0 |
+                    (SBoxInverse[i%8][(X[j] >> 4 ) & 0xF]) << 4 |
+                    (SBoxInverse[i%8][(X[j] >> 8 ) & 0xF]) << 8 |
+                    (SBoxInverse[i%8][(X[j] >> 12) & 0xF]) << 12|
+                    (SBoxInverse[i%8][(X[j] >> 16) & 0xF]) << 16|
+                    (SBoxInverse[i%8][(X[j] >> 20) & 0xF]) << 20|
+                    (SBoxInverse[i%8][(X[j] >> 24) & 0xF]) << 24|
+                    (SBoxInverse[i%8][(X[j] >> 28) & 0xF]) << 28;
         }
         for (int j = 0; j < 4; ++j) {
             result[j] = X[j] ^ subkeysHat[i][j];
@@ -410,4 +447,56 @@ void serpent_decrypt(const unsigned char* plaintext, const unsigned char* key, u
     
     // copy 128 bits to output string
     memcpy(output, finalResult, 16);
+}
+
+void serpent_decrypt_bitslice(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+    uint subkeys[33][4] = {0};
+    
+    printHex(plaintext, 16, "Plaintext:");
+    
+    key_generation_bitslice(subkeys, key, output, kBytes);
+    
+    /*  Start plaintext processing  */
+    
+    // ignore bit[0] and bit[127]
+    // replace bit[1..126] with bit[(i*32)%127]
+    uint *X = (uint*)plaintext;
+    
+    /* LINEAR TRANSFORMATION */
+    // 32 rounds
+    uint uX[4] = {0};
+    for(int i = 31; i >= 0; --i) {
+        if(i < 31){
+            // reduced assignment linear mixing (minimized from step equation in documentation)
+            X[3] = rotl(X[3], 25) ^ rotl(X[2], 10) ^ X[3] ^ (X[1] >> 7) ^ (rotl(X[0], 27) ^ X[1] ^ X[3] >> 3);
+            X[1] = rotl(X[0], 27) ^ X[1] ^ X[3] ^ rotl(X[1], 31) ^ rotl(X[2], 10) ^ X[3] ^ (X[1] >> 7);
+            X[2] = rotl(rotl(X[2], 10) ^ X[3] ^ (X[1] >> 7), 29);
+            X[0] = rotl(rotl(X[0], 27) ^ X[1] ^ X[3], 19);
+        }
+        else{
+            // In the last round, the transformation is replaced by an additional key mixing
+            X[0] = X[0] ^ subkeys[32][0];
+            X[1] = X[1] ^ subkeys[32][1];
+            X[2] = X[2] ^ subkeys[32][2];
+            X[3] = X[3] ^ subkeys[32][3];
+        }
+        for(int j = 0; j < 32; ++j) {
+            uint v = (SBoxInverse[i%8][((X[0] >> (j)) & 1) << 0 |
+                                       ((X[1] >> (j)) & 1) << 1 |
+                                       ((X[2] >> (j)) & 1) << 2 |
+                                       ((X[3] >> (j)) & 1) << 3 ]);
+            
+            uX[0] |= ((v >> 0)&1) << j;
+            uX[1] |= ((v >> 1)&1) << j;
+            uX[2] |= ((v >> 2)&1) << j;
+            uX[3] |= ((v >> 3)&1) << j;
+        }
+        for (int j = 0; j < 4; ++j) {
+            X[j] = uX[j] ^ subkeys[i][j];
+            X[j] =  0;
+        }
+    }
+    
+    // copy 128 bits to output string
+    memcpy(output, X, 16);
 }
