@@ -39,7 +39,7 @@ void print_bits(const char* b, const char* message) {
 int main(int argc, const char * argv[]) {
     // HEX INPUT
     // (8 bits * 4) * 4 = 128 bits
-    const char * test_string = "00000000000000000000000000000000" ;
+    const char * test_string = "fbc53b3976a156e02d0c555213e8dd02" ;
     // key in this implementation must be 128bits
     const char * key_string  = "00000000000000000000000000000000" ;
     /*                          ^ = msb                        ^ = lsb */

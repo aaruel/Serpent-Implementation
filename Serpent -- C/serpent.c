@@ -122,7 +122,11 @@ BIT getBit(WORD x[], int p) {
                    & ((WORD) 0x1 << p%BITS_PER_WORD)) >> p%BITS_PER_WORD);
 }
 
-void key_generation_standard(uint subkeysHat[33][4], const uchar *key, uchar *output, uint kBytes) {
+void key_generation_standard(uint subkeysHat[33][4],
+                             const uchar *key,
+                             uchar *output,
+                             uint kBytes) {
+    
     // 33 subkeys * 32bits * 4 blocks
     uint subkeys[33][4]= {0};
     uint keysplit[8]   = {0};
@@ -198,7 +202,11 @@ void key_generation_standard(uint subkeysHat[33][4], const uchar *key, uchar *ou
     }
 }
 
-void key_generation_bitslice(uint subkeys[33][4], const uchar *key, uchar *output, uint kBytes) {
+void key_generation_bitslice(uint subkeys[33][4],
+                             const uchar *key,
+                             uchar *output,
+                             uint kBytes) {
+    
     // 33 subkeys * 32bits * 4 blocks
     uint keysplit[8]   = {0};
     uint interkey[140] = {0};
@@ -268,7 +276,11 @@ void key_generation_bitslice(uint subkeys[33][4], const uchar *key, uchar *outpu
     }
 }
 
-void serpent_encrypt_standard(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+void serpent_encrypt_standard(const unsigned char* plaintext,
+                              const unsigned char* key,
+                              unsigned char * output,
+                              unsigned int kBytes) {
+    
     // 33 subkeys * 32bits * 4 blocks
     uint subkeysHat[33][4]= {0};
     
@@ -332,7 +344,11 @@ void serpent_encrypt_standard(const unsigned char* plaintext, const unsigned cha
     // copy 128 bits to output string
     memcpy(output, finalResult, 16);
 }
-void serpent_encrypt_bitslice(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+void serpent_encrypt_bitslice(const unsigned char* plaintext,
+                              const unsigned char* key,
+                              unsigned char * output,
+                              unsigned int kBytes) {
+    
     uint subkeys[33][4] = {0};
     
     printHex(plaintext, 16, "Plaintext:");
@@ -341,8 +357,7 @@ void serpent_encrypt_bitslice(const unsigned char* plaintext, const unsigned cha
     
     /*  Start plaintext processing  */
     
-    // ignore bit[0] and bit[127]
-    // replace bit[1..126] with bit[(i*32)%127]
+    // Adapt char pointer to 32bit pointer
     uint *X = (uint*)plaintext;
     
     /* LINEAR TRANSFORMATION */
@@ -365,6 +380,18 @@ void serpent_encrypt_bitslice(const unsigned char* plaintext, const unsigned cha
             X[3] |= ((v >> 3)&1) << j;
         }
         if(i < 31){
+            
+//            X[0] = rotl(X[0], 13);
+//            X[2] = rotl(X[2], 3);
+//            X[1] = X[1] ^ X[0] ^ X[2];
+//            X[3] = X[3] ^ X[2] ^ (X[0] << 3);
+//            X[1] = rotl(X[1], 1);
+//            X[3] = rotl(X[3], 7);
+//            X[0] = X[0] ^ X[1] ^ X[3];
+//            X[2] = X[2] ^ X[3] ^ (X[1] << 7);
+//            X[0] = rotl(X[0], 5);
+//            X[2] = rotl(X[2], 22);
+            
             // reduced assignment linear mixing (minimized from step equation in documentation)
             X[1] = rotl(X[1] ^ rotl(X[0], 13) ^ rotl(X[2], 3 ), 1);
             X[3] = rotl(X[3] ^ rotl(X[2], 3 ) ^ (rotl(X[0], 13) << 3), 7);
@@ -384,7 +411,10 @@ void serpent_encrypt_bitslice(const unsigned char* plaintext, const unsigned cha
     memcpy(output, X, 16);
 }
 
-void serpent_decrypt_standard(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+void serpent_decrypt_standard(const unsigned char* plaintext,
+                              const unsigned char* key,
+                              unsigned char * output,
+                              unsigned int kBytes) {
     
     uint subkeysHat[33][4] = {0};
     
@@ -449,7 +479,11 @@ void serpent_decrypt_standard(const unsigned char* plaintext, const unsigned cha
     memcpy(output, finalResult, 16);
 }
 
-void serpent_decrypt_bitslice(const unsigned char* plaintext, const unsigned char* key, unsigned char * output, unsigned int kBytes) {
+void serpent_decrypt_bitslice(const unsigned char* plaintext,
+                              const unsigned char* key,
+                              unsigned char * output,
+                              unsigned int kBytes) {
+    
     uint subkeys[33][4] = {0};
     
     printHex(plaintext, 16, "Plaintext:");
@@ -458,8 +492,7 @@ void serpent_decrypt_bitslice(const unsigned char* plaintext, const unsigned cha
     
     /*  Start plaintext processing  */
     
-    // ignore bit[0] and bit[127]
-    // replace bit[1..126] with bit[(i*32)%127]
+    // Adapt char pointer to 32bit pointer
     uint *X = (uint*)plaintext;
     
     /* LINEAR TRANSFORMATION */
@@ -468,10 +501,16 @@ void serpent_decrypt_bitslice(const unsigned char* plaintext, const unsigned cha
     for(int i = 31; i >= 0; --i) {
         if(i < 31){
             // reduced assignment linear mixing (minimized from step equation in documentation)
-            X[3] = rotl(X[3], 25) ^ rotl(X[2], 10) ^ X[3] ^ (X[1] >> 7) ^ (rotl(X[0], 27) ^ X[1] ^ X[3] >> 3);
-            X[1] = rotl(X[0], 27) ^ X[1] ^ X[3] ^ rotl(X[1], 31) ^ rotl(X[2], 10) ^ X[3] ^ (X[1] >> 7);
-            X[2] = rotl(rotl(X[2], 10) ^ X[3] ^ (X[1] >> 7), 29);
-            X[0] = rotl(rotl(X[0], 27) ^ X[1] ^ X[3], 19);
+            X[2] = rotl(X[2], 10) ^ X[3] ^ (X[1] << 7);
+            X[0] = rotl(X[0], 27) ^ X[1] ^ X[3];
+            X[3] = rotl(X[3], 25);
+            X[1] = rotl(X[1], 31);
+            
+            
+            X[3] = X[3] ^ X[2] ^ (X[0] << 3);
+            X[1] = X[1] ^ X[0] ^ X[2];
+            X[2] = rotl(X[2], 29);
+            X[0] = rotl(X[0], 19);
         }
         else{
             // In the last round, the transformation is replaced by an additional key mixing
@@ -493,7 +532,7 @@ void serpent_decrypt_bitslice(const unsigned char* plaintext, const unsigned cha
         }
         for (int j = 0; j < 4; ++j) {
             X[j] = uX[j] ^ subkeys[i][j];
-            X[j] =  0;
+            uX[j] =  0;
         }
     }
     

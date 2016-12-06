@@ -3,55 +3,28 @@
 --
 
 architecture decrypt of serpent is
-
-function InverseFinalPermutation(input: uintArray(0 to 3)) return uintArray is
-variable output: uintArray(0 to 3) := (others => X"00000000");
-variable replacer: integer := 0;
-begin
-	-- save end bits
-	output(0)(0) := input(0)(0);
-	output(3)(31) := input(3)(31);
-	for i in 1 to 126 loop
-		replacer := ((4*i) mod 127);
-		output(replacer/32)(replacer mod 32) := input(i/32)(i mod 32);
-	end loop; 
-	return output;
-end InverseFinalPermutation;
-
-function InverseInitialPermutation(input: uintArray(0 to 3)) return uintArray is
-variable output: uintArray(0 to 3) := (others => X"00000000");
-variable replacer: integer := 0;
-begin
-	-- save end bits
-	output(0)(0) := input(0)(0);
-	output(3)(31) := input(3)(31);
-	for i in 1 to 126 loop
-		replacer := ((32*i) mod 127);
-		output(replacer/32)(replacer mod 32) := input(i/32)(i mod 32);
-	end loop;
-	return output;
-end InverseInitialPermutation;
-
 begin
 	process	
-	
 	-- registers
-	variable eax, ebx, ecx: unsigned(31 downto 0) := (X"00000000");
+	variable eax, ebx: unsigned(31 downto 0) := (X"00000000");
 	
 	variable extended_key: uintArray(0 to 7) := (others => X"00000000");
 	variable prekeys: uintArray(0 to 139) := (others => X"00000000");
 	variable subkeys: uintArray2d(0 to 32, 0 to 3) := (others => (others => X"00000000"));
-	variable subkeysHat: uintArray2d(0 to 32, 0 to 3) := (others => (others => X"00000000"));
-	variable X: uintArray(0 to 3) := (others => X"00000000");
-	variable ciphertextWordSplit: uintArray(0 to 3) := (others => X"00000000");
-	variable finalResult: uintArray(0 to 3) := (others => X"00000000"); 
-	variable finalResultFP: uintArray(0 to 3) := (others => X"00000000");
+	variable X, uX: uintArray(0 to 3) := (others => X"00000000"); 
+	
+	alias unsigned_to_int is to_integer[unsigned return integer];
 	begin
 		-- execution on rising edge and data_ready
 		wait until (CLK'event and CLK='1') and data_ready='1'; 
+		-- disallow more data to cross over
+		--data_ready <= '0';
+		
 		-- bit extend 128bit key into 256bits
-		extended_key(4)(0) := '1';
+		extended_key(4) := X"00000001";
+
 		for i in 0 to 127 loop
+			assert(key(i) /= 'X') report "KEY NOT INITIALIZED :: keybit = "& integer'image(i)& " is " & std_logic'image(key(i)) severity failure;
 			extended_key(i/32)(i mod 32) := key(i);
 		end loop;
 		
@@ -72,81 +45,59 @@ begin
 			-- SBox selector
 			eax := to_unsigned((32+3-i) mod 32, eax'length);
 			for j in 0 to 31 loop
-				ebx(3 downto 0) := prekeys(8+3+(4*i))(j)&prekeys(8+2+(4*i))(j)&prekeys(8+1+(4*i))(j)&prekeys(8+0+(4*i))(j);
-				ebx := to_unsigned(Sbox(to_integer(eax), to_integer(ebx)), ebx'length);
+				ebx(3 downto 0) := prekeys(8+3+(4*i))(j)&prekeys(8+2+(4*i))(j)&prekeys(8+1+(4*i))(j)&prekeys(8+0+(4*i))(j);	
+				ebx := to_unsigned(Sbox(to_integer(eax) mod 8, to_integer(ebx)), ebx'length);
 				for l in 0 to 3 loop
 					subkeys(i, l)(j) := ebx(l);
 				end loop;
 			end loop;
 		end loop;
-		
-		-- permutate keys
-		for i in 0 to 32 loop
-			-- save end bits
-			subkeysHat(i,0)(0) := subkeys(i,0)(0); 
-			subkeysHat(i,3)(31) := subkeys(i,3)(31);
-			for j in 1 to 126 loop
-				subkeysHat(i, j/32)(j mod 32) := subkeys(i, ((j*32)mod 127)/32)(((j*32)mod 127) mod 32);
-			end loop;
-		end loop;
 		-- end key processing
 		
-		-- reverse ciphertext processing
-		-- reverse final permutation
+		-- plaintext processing
 		
-		-- split ciphertext into 4 words
+		-- split plaintext into 4 words
 		for i in 0 to 127 loop
-			ciphertextWordSplit(i/32)(i mod 32) := inputtext(i);
+			X(i/32)(i mod 32) := inputtext(i);
 		end loop;
-		finalResult := InverseFinalPermutation(ciphertextWordSplit);
 		
 		-- Inverse Linear Transformation - 32 rounds
 		
 		for i in 31 downto 0 loop
 			if i < 31 then
-				-- last 31 routines
-				for a in 0 to 127 loop
-					eax := X"00000000";	
-					ebx := X"00000000";
-					ecx := X"00000000";
-					while (LTTableInverse(a, to_integer(eax)) /= MARKER) loop
-						-- xor the register bit with final result with LTTable as the bit selector
-						ecx := to_unsigned(LTTableInverse(a, to_integer(eax)), ecx'length);
-						ebx(0) := ebx(0) xor (finalResult(to_integer(ecx/32))(to_integer(ecx mod 32)));
-						eax := eax+1; 
-					end loop;
-					X(a/32)(a mod 32) := ebx(0);
-				end loop; 
+				X(2) := rotate_left(X(2), 10) xor X(3) xor (X(1) sll 7);
+				X(0) := rotate_left(X(0), 27) xor X(1) xor X(3);
+				X(3) := rotate_left(X(3), 25);
+				X(1) := rotate_left(X(1), 31);
+				
+				X(3) := X(3) xor X(2) xor (X(0) sll 3);
+				X(1) := X(1) xor X(0) xor X(2);
+				X(2) := rotate_left(X(2), 29);
+				X(0) := rotate_left(X(0), 19);
+				
 			else
-				-- first iteration
-				X(0) := finalResult(0) xor subkeysHat(32, 0);
-				X(1) := finalResult(1) xor subkeysHat(32, 1);
-				X(2) := finalResult(2) xor subkeysHat(32, 2);
-				X(3) := finalResult(3) xor subkeysHat(32, 3);
+				-- first iteration routine
+				X(0) := X(0) xor subkeys(32, 0);
+				X(1) := X(1) xor subkeys(32, 1);
+				X(2) := X(2) xor subkeys(32, 2);
+				X(3) := X(3) xor subkeys(32, 3);
 			end if;
-			-- Inverse Sbox input
-			for j in 0 to 3 loop
-				-- Get 4 bits of data from SBoxInverse using 4bits sequentially from X as a selector and append up to 32 bits
-				X(j) := (to_unsigned(SBoxInverse(i, to_integer(X(j)(31 downto 28))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(27 downto 24))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(23 downto 20))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(19 downto 16))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(15 downto 12))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(11 downto 8 ))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(7  downto 4 ))), 4) and X"F") &
-						(to_unsigned(SBoxInverse(i, to_integer(X(j)(3  downto 0 ))), 4) and X"F");
+			-- Sbox input
+			for j in 0 to 31 loop
+				uX(0)(j) := to_unsigned(SboxInverse(i mod 8, unsigned_to_int(X(3)(j)&X(2)(j)&X(1)(j)&X(0)(j))), 32)(0);
+				uX(1)(j) := to_unsigned(SboxInverse(i mod 8, unsigned_to_int(X(3)(j)&X(2)(j)&X(1)(j)&X(0)(j))), 32)(1);
+				uX(2)(j) := to_unsigned(SboxInverse(i mod 8, unsigned_to_int(X(3)(j)&X(2)(j)&X(1)(j)&X(0)(j))), 32)(2);
+				uX(3)(j) := to_unsigned(SboxInverse(i mod 8, unsigned_to_int(X(3)(j)&X(2)(j)&X(1)(j)&X(0)(j))), 32)(3);
 			end loop;
 			for j in 0 to 3 loop
-				finalResult(j) := X(j) xor subkeysHat(i, j);
+				X(j) := uX(j) xor subkeys(i, j);
+				uX(j) := X"00000000";
 			end loop;
 		end loop;
 		
-		-- assuming pass by copy, might need another variable
-		finalResultFP := InverseInitialPermutation(finalResult);
-		
 		-- copy final result into the output
 		for i in 0 to 127 loop
-			outputtext(i) <= finalResultFP(i/32)(i mod 32);
+			outputtext(i) <= X(i/32)(i mod 32);
 		end loop;
 	end process;
 end architecture decrypt;
