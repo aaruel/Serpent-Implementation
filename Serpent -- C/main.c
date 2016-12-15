@@ -3,14 +3,13 @@
 //  Serpent
 //
 //  This implementation shows two different methods of serpent
-//      1. Regular mode  -- shown with the decryption module
-//      2. Bitslice mode -- shown with the encryption module
+//      1. Regular mode  
+//      2. Bitslice mode
 //  Both models have the same key generation method, except
 //      - Regular mode includes an initial and final permutation for plaintext
 //      - Regular mode has a key permutation step
 //      - Regular mode uses the SBox slightly different in the linear transformation
 //      - Bitslice mode for LT uses an equation, regular mode uses the linear transformation tables
-//  Feeding the output of the Bitslice encryption into the regular mode decryption proves it's equality in correctness
 
 #include <stdio.h>
 #include <string.h>
@@ -39,7 +38,7 @@ void print_bits(const char* b, const char* message) {
 int main(int argc, const char * argv[]) {
     // HEX INPUT
     // (8 bits * 4) * 4 = 128 bits
-    const char * test_string = "fbc53b3976a156e02d0c555213e8dd02" ;
+    const char * test_string = "00000000000000000000000000000000" ;
     // key in this implementation must be 128bits
     const char * key_string  = "00000000000000000000000000000000" ;
     /*                          ^ = msb                        ^ = lsb */
