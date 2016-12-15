@@ -15,7 +15,6 @@ for i in 8 to 140 {
 ```
 
 1. Generate subkeys from S-boxes
-	- serpent.c:line 149-162
 	- Explanation of sbox output
 		- select current S-box row with ((32+3-i) mod 32)
 		- Form a 4 bit value that selects value in row by concatenating bits in prekeys following
@@ -27,21 +26,36 @@ for i in 8 to 140 {
 
 -- PLAINTEXT TRANSFORMS
 
-1. Description of initial permutation function
-	- Load first and last bits of input into empty bit array
-	- Iterate over rest of empty array and set bits from input at position ((i*32) mod 127)
+- Only in standard version
+    1. Description of initial permutation function
+    	- Load first and last bits of input into empty bit array
+    	- Iterate over rest of empty array and set bits from input at position ((i*32) mod 127)
 
-1. Run plaintext through initial permutation function
-1. Run each subkey through initial permutation function
+    1. Run plaintext through initial permutation function
+    1. Run each subkey through initial permutation function
+
 1. Start 32 rounds
 1. XOR plaintext permutation and current subkey permutation each round
-1. Form 32bit value using the 8 4bit values to return S-box value and append
-1. First 31 rounds
-	- access Linear Transformation table with iterators to return bit position from above 32 bit value to load into plaintext permutation
+- Standard Version
+    1. Form 32bit value using the 8 4bit values to return S-box value and append
+    1. First 31 rounds
+    	- access Linear Transformation table with iterators to return bit position from above 32 bit value to load into plaintext permutation
+- Bitslice Version
+    1. Take one bit from each XOR'd 32bit value starting from position 0 (totaling 4bits) and use that as input to return a value from S-box i%8
+    1. The 4bit value returned from the S-Box is distributed to the 32bit values the same way it was extracted
+    1. Run the resulting 4 32bit values through the linear transformation equation referenced in the documentation
 1. Last round
 	- XOR above 32 bit value and 33rd subkey permutations into result
 
-1. Final permutation
-	- Exactly the same as initial permutation except using the bit selector ((i*4)%127)
+- Only in standard version
+    1. Final permutation
+    	- Exactly the same as initial permutation except using the bit selector ((i*4)%127)
 
 1. End encryption
+
+##Serpent Decryption Process
+
+- Logically work backwards from encryption
+- Use inverse tables such as Inverse Linear Transformation Table and Inverse S-boxes
+- Note: In the bitslice, the LT equation uses shift left logical which should also be used in decryption
+    - The rotations are still the opposite, the shift is not
