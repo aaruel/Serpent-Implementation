@@ -71,8 +71,7 @@ begin
 			end generate;
 		end block;
 		
-		-- 1 clock cycle
-		-- allowed because assignee doesn't rely on itself
+		-- 1 clock cycle 
 		SK_LOAD: block(SK_EN='1')
 		begin
 			SK_CURRBOX: for i in 0 to 32 generate
