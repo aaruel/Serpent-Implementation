@@ -2,6 +2,15 @@ library IEEE;
 use IEEE.numeric_std.all;
 
 package tables is
+	-- setup and hold time
+	constant g_tsu: time := 0.5ns;
+	constant g_th : time := 0.3ns;
+	-- contamination low to high
+	constant g_tplh: time := 0.5ns;
+	constant g_tphl: time := 0.4ns;
+	-- gate propagation
+	constant g_tpd : time := 1ns;
+	
 	type uintArray is array(natural range<>) of unsigned(31 downto 0);
 	type intArray2d is array(natural range<>, natural range<>) of integer;
 	type uintArray2d is array(natural range<>, natural range<>) of unsigned(31 downto 0);
